@@ -23,10 +23,11 @@ function App() {
       </SignedOut>
 
       <SignedIn>
-        <SignOutButton />
+        <UserButton />
+        <SignOutButton />  
       </SignedIn>
 
-      <UserButton />
+      
     </>
   );
 }
