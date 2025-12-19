@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import {inngest,functions} from "./lib/inngest.js";
 import dotenv from "dotenv";
 import { ENV } from "./lib/env.js";
 import { connectDB } from "./lib/db.js";
