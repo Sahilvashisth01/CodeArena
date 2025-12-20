@@ -126,3 +126,43 @@ Local testing tips
 
 If you'd like, I can add `backend/.env.example` and `frontend/.env.example` files and/or a short script that posts a sample `clerk/user.created` payload to `/api/inngest` for local testing.
 
+## Stream Chat integration
+
+This project integrates Stream Chat to manage user objects in the chat service alongside the main MongoDB `User` documents. The helper functions live in `backend/src/lib/stream.js` and are invoked from the Inngest functions in `backend/src/lib/inngest.js` whenever a Clerk user is created or deleted.
+
+What the code does
+
+- `backend/src/lib/stream.js`
+	- Initializes a Stream client with `StreamChat.getInstance(apiKey, apiSecret)` using `ENV.STREAM_API_KEY` and `ENV.STREAM_API_SECRET`.
+	- `upsertStreamUser(userData)` — calls `chatClient.upsertUser(userData)` to create or update a Stream user. It expects an object with at least `id`, and optionally `name`, `image`, etc.
+	- `deleteStreamUser(userId)` — calls `chatClient.deleteUser(userId)` to remove a user from Stream.
+
+- `backend/src/lib/inngest.js` calls `upsertStreamUser` after inserting a new `User` in MongoDB and `deleteStreamUser` when deleting a user.
+
+Environment variables required for Stream
+
+- `STREAM_API_KEY` — the Stream API key.
+- `STREAM_API_SECRET` — the Stream API secret. Keep this secret; do not commit it.
+
+Where Stream integration is used
+
+- When a Clerk `user.created` event is received, Inngest's `sync-user` function:
+	1. Connects to MongoDB and creates a `User` document.
+	2. Calls `upsertStreamUser` with `{ id: clerkId, name, image }` to ensure the user exists in Stream.
+- When a Clerk `user.deleted` event is received, Inngest's `delete-user` function deletes the MongoDB user and calls `deleteStreamUser` to remove the Stream user.
+
+Testing and troubleshooting Stream integration
+
+- Verify `STREAM_API_KEY` and `STREAM_API_SECRET` are set in `backend/.env` and that they are valid for your Stream app.
+- Watch backend logs for messages from `stream.js` (it logs success/failure for upsert/delete operations).
+- If `chatClient` initialization fails, the file logs an error: `Stream_API_key OR Stream_API_SECRET is missing`.
+- If user upserts/deletes silently fail, try calling the Stream client directly in a small script or Node REPL using the same env values to isolate credential/network issues.
+
+Token generation note (TODO)
+
+- Chat applications typically need a server endpoint to issue Stream user tokens to clients (for authenticated access). `stream.js` currently includes upsert and delete helpers but does not expose a token generation endpoint. Consider adding a secure endpoint such as `POST /api/stream/token` that:
+	1. Verifies the user (for example via Clerk session or other auth middleware).
+	2. Uses the Stream server secret to create a user token and returns it to the client.
+
+If you want, I can implement the token endpoint and a minimal client example that requests and uses the token in the frontend.
+
