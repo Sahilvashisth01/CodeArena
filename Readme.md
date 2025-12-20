@@ -166,3 +166,68 @@ Token generation note (TODO)
 
 If you want, I can implement the token endpoint and a minimal client example that requests and uses the token in the frontend.
 
+## Clerk middleware, protectRoute, chatRoutes, and getStreamToken
+
+This project uses Clerk for authentication and exposes a protected chat token endpoint so authenticated frontend users can get Stream tokens. Below is a concise explanation of how the pieces fit together and how to call the endpoint during development.
+
+Files to inspect
+
+- `backend/src/server.js` — registers Clerk middleware with `app.use(clerkMiddleware())` and mounts the chat router at `/api/chat` (`app.use('/api/chat', chatRoutes)`). The Clerk middleware populates auth helpers on the request (used by `requireAuth()` and `req.auth`).
+- `backend/src/middleware/protectRoute.js` — provides the `protectRoute` middleware array used by chat routes. It runs `requireAuth()` (Clerk middleware that enforces authentication) and then a short handler that:
+	1. Reads the Clerk user id via `req.auth().userId`.
+	2. Looks up the corresponding user record in MongoDB using `User.findOne({ clerkId })`.
+	3. Attaches the found `user` document to `req.user` for downstream handlers.
+	4. Returns a 401 when not authenticated or if the user is not found.
+- `backend/src/routes/chatRoutes.js` — defines `GET /token` and protects it with `protectRoute`. The router is exported and mounted under `/api/chat`.
+- `backend/src/controllers/chatController.js` — implements `getStreamToken(req, res)`. It calls `chatClient.createToken(req.user.clerkId)` and returns JSON:
+	- `token` — the Stream user token
+	- `userId` — the Clerk id (used as Stream id)
+	- `userName` and `userImage` — convenience info from the DB user doc
+
+How the flow works (runtime)
+
+1. Browser frontend authenticates the user via Clerk and holds a Clerk session (cookie or token).
+2. Frontend calls `GET /api/chat/token` (on same origin or using correct `CLIENT_URL`) with credentials (cookies) included.
+3. `clerkMiddleware()` and `requireAuth()` validate the request/session with Clerk.
+4. `protectRoute` then finds the application `User` document using the Clerk user id.
+5. `getStreamToken` uses the server Stream client (`chatClient`) to create a token for the Clerk id and returns it to the client.
+
+Example frontend fetch (from an authenticated browser session):
+
+```js
+const res = await fetch('/api/chat/token', {
+	method: 'GET',
+	credentials: 'include', // important so Clerk session cookie is sent
+});
+if (!res.ok) throw new Error('Failed to get token');
+const body = await res.json();
+// body.token, body.userId, body.userName
+```
+
+Auth and CORS notes
+
+- `CLIENT_URL` is used in `server.js` for CORS. When calling `/api/chat/token` from the browser, ensure `CLIENT_URL` matches the frontend origin and that `fetch` uses `credentials: 'include'` so Clerk session cookies are sent.
+- `requireAuth()` will return a 401 if the request isn't authenticated with Clerk. If you see 401s during local tests, confirm the frontend is logged in and that cookies are being forwarded.
+
+Common errors and how to debug
+
+- 401 Unauthorized:
+	- The Clerk session is missing or invalid. Confirm the frontend is logged in and requests include credentials (cookies or authorization header as configured).
+	- The middleware may also return 401 if the user isn't found in the `users` collection — ensure the Clerk user was synced to the DB (via Inngest or manual insert).
+- 500 Server Error when creating token:
+	- Check backend logs for errors from `chatClient.createToken` or `req.user` being undefined.
+	- Ensure `STREAM_API_KEY` and `STREAM_API_SECRET` are set and valid.
+
+Local testing checklist
+
+1. Run MongoDB (or ensure Atlas connection) and set `DB_URL`.
+2. Start backend: `npm run dev --prefix backend`.
+3. Start frontend and sign in a user with Clerk.
+4. After sign-up, ensure the user exists in MongoDB (Inngest should have created it, or create it manually for testing).
+5. From the authenticated browser, call `/api/chat/token` and verify you get a token in the response.
+
+If you'd like, I can add an automated local test script that:
+- creates a test user document in MongoDB (matching a Clerk test id),
+- then calls `/api/chat/token` with a simulated Clerk auth header (or a test-only bypass),
+so you can verify Stream token generation without a full Clerk login flow.
+
