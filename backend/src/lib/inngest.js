@@ -1,9 +1,10 @@
 import { Inngest } from "inngest";
 import { connectDB } from "./db.js";
 import User from "../models/User.js";
+import { upsertStreamUser, deleteStreamUser } from "./stream.js";
 
 export const inngest = new Inngest({ id: "CodeArena" });
-
+//function to sync user from clerk to our db
 const syncUser = inngest.createFunction(
   { id: "sync-user" },
   { event: "clerk/user.created" },
@@ -19,11 +20,18 @@ const syncUser = inngest.createFunction(
       name: `${first_name || ""} ${last_name || ""}`,
       profileImage: image_url,
     };
-
+    //save user to db
     await User.create(newUser);
+
+    //also create user in stream
+    await upsertStreamUser({
+      id: newUser.clerkId.toString(),
+      name: newUser.name,
+      image: newUser.profileImage,
+    });
   }
 );
-
+//function to delete user from our db when deleted from clerk
 const deleteUserFromDB = inngest.createFunction(
   { id: "delete-user" },
   { event: "clerk/user.deleted" },
@@ -33,7 +41,8 @@ const deleteUserFromDB = inngest.createFunction(
     const { id } = event.data;
     await User.deleteOne({ clerkId: id });
 
-    //todo:do sth else
+    //also delete user from stream
+    await deleteStreamUser(id.toString());
   }
 );
 
