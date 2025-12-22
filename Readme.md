@@ -6,6 +6,15 @@ Short instructions to run and build the React frontend and Express backend.
 
 These commands run the React dev server (Vite) and the Express backend in development mode.
 
+````markdown
+# CodeArena
+
+Short instructions to run and build the React frontend and Express backend.
+
+## Development (start)
+
+These commands run the React dev server (Vite) and the Express backend in development mode.
+
 1. Install dependencies for both packages (run from project root):
 
 ```bash
@@ -83,8 +92,8 @@ High level flow
 2. Clerk emits an event (for example, `clerk/user.created` or `clerk/user.deleted`).
 3. The event is sent to your backend's Inngest endpoint exposed at `/api/inngest` (this project mounts Inngest middleware at that path).
 4. Inngest receives the event and triggers the appropriate function defined in `backend/src/lib/inngest.js`:
-	 - `sync-user` (on `clerk/user.created`) — extracts user fields from the event and creates a `User` document in MongoDB.
-	 - `delete-user` (on `clerk/user.deleted`) — removes the corresponding `User` document by `clerkId`.
+ 	 - `sync-user` (on `clerk/user.created`) — extracts user fields from the event and creates a `User` document in MongoDB.
+ 	 - `delete-user` (on `clerk/user.deleted`) — removes the corresponding `User` document by `clerkId`.
 5. The Inngest functions call `connectDB()` to ensure there is a MongoDB connection before reading/writing data.
 
 Where to look in the code
@@ -98,7 +107,7 @@ Where to look in the code
 
 Environment variables and setup notes
 
-- `DB_URL` (backend) — required. The Inngest functions call `connectDB()` and the server will exit if `DB_URL` is not set or the DB connection fails. Provide a working MongoDB connection string (Atlas or self-hosted).
+- `DB_URL` (backend) — required. The Inngest functions call `connectDB()` and the server will exit if `DB_URL` is not set and the DB connection fails. Provide a working MongoDB connection string (Atlas or self-hosted).
 - `PORT` (backend) — port the Express server listens on.
 - `NODE_ENV` — set to `production` for the backend to serve the built frontend.
 - `CLIENT_URL` — used by the backend CORS configuration (`ENV.CLIENT_URL`) so the frontend origin can make requests to the API. Make sure this is set if you use CORS origin checks.
@@ -227,7 +236,47 @@ Local testing checklist
 5. From the authenticated browser, call `/api/chat/token` and verify you get a token in the response.
 
 If you'd like, I can add an automated local test script that:
-- creates a test user document in MongoDB (matching a Clerk test id),
-- then calls `/api/chat/token` with a simulated Clerk auth header (or a test-only bypass),
+ - creates a test user document in MongoDB (matching a Clerk test id),
+ - then calls `/api/chat/token` with a simulated Clerk auth header (or a test-only bypass),
 so you can verify Stream token generation without a full Clerk login flow.
+
+
+**Session Endpoints**
+- **Base path:** `/api/sessions` (mounted in `backend/src/server.js`). All routes below are protected and require a logged-in user via Clerk + `protectRoute`.
+- **POST /**: Create a session
+  - **Request body:** `{ problem: string, difficulty: "easy"|"medium"|"hard" }`
+  - **Behavior:** Creates a `Session` document (host = current user), generates a unique `callId`, creates a Stream video call and a Stream chat channel for the session.
+  - **Responses:** `201` with `{ session }` on success, `400` when required fields missing, `500` on server error.
+- **GET /active**: List active sessions
+  - **Behavior:** Returns up to 20 sessions with `status: "active"`, populated host info.
+  - **Responses:** `200` with `{ sessions }`, `500` on server error.
+- **GET /my-recent**: Get my recent completed sessions
+  - **Behavior:** Returns up to 20 sessions where the current user is host or participant and `status: "completed"`.
+  - **Responses:** `200` with `{ sessions }`, `500` on server error.
+- **GET /:id**: Get session by id
+  - **Behavior:** Returns session details including populated `host` and `participants` fields.
+  - **Responses:** `200` with `{ session }`, `404` if not found, `500` on server error.
+- **POST /:id/join**: Join a session
+  - **Behavior:** Adds the current user as `participants` (if slot is free) and adds the user's Stream id to the session chat channel members.
+  - **Responses:** `200` with `{ session }` on success, `400` if session already has a participant, `404` if session not found, `500` on server error.
+- **GET /:id/end**: End a session (host only)
+  - **Behavior:** Only the session `host` can call this. Marks session `status` = `completed`, deletes the Stream video call and deletes the Stream chat channel.
+  - **Responses:** `200` with `{ session, msg }` on success, `403` if caller is not host, `400` if already completed, `404` if session not found, `500` on server error.
+
+**Session Controller**
+- **File:** `backend/src/controllers/sessionController.js`
+- **Responsibilities:**
+  - Create sessions: validate input, persist a `Session` document, generate a unique `callId`, create a Stream video call (via `streamClient.video.call(...).getOrCreate`) and a Stream chat channel (via `chatClient.channel(...).create`).
+  - List active sessions: query `Session` for `status: "active"`, populate host and return latest 20.
+  - List user's recent sessions: query completed sessions where the user is `host` or `participants`.
+  - Fetch session by id: return session with populated host and participant info.
+  - Join session: ensure session exists and has no participant, set `participants` to current user, and add the user to the Stream chat channel members.
+  - End session: verify requester is the host, mark session `completed`, delete the Stream video call and the Stream chat channel.
+- **Notes & caveats:**
+  - The controller expects `req.user` to include `_id` and `clerkId` (provided by `protectRoute`).
+  - Stream operations (video call creation/deletion and chat channel creation/deletion) are performed during controller actions and may fail separately from DB operations; check backend logs for Stream errors.
+  - Responses use standard HTTP status codes to indicate validation (`400`), unauthorized/forbidden (`401`/`403`), not found (`404`), success (`200`/`201`), and server errors (`500`).
+
+```
+
 
