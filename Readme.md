@@ -235,10 +235,7 @@ Local testing checklist
 4. After sign-up, ensure the user exists in MongoDB (Inngest should have created it, or create it manually for testing).
 5. From the authenticated browser, call `/api/chat/token` and verify you get a token in the response.
 
-If you'd like, I can add an automated local test script that:
- - creates a test user document in MongoDB (matching a Clerk test id),
- - then calls `/api/chat/token` with a simulated Clerk auth header (or a test-only bypass),
-so you can verify Stream token generation without a full Clerk login flow.
+
 
 
 **Session Endpoints**
