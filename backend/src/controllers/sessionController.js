@@ -7,7 +7,7 @@ export async function createSession(req, res) {
     const { problem, difficulty } = req.body;
     const userId = req.user._id;
     const clerkUserId = req.user.clerkId;
-
+    //validate input
     if (!problem || !difficulty) {
       return res
         .status(400)
@@ -44,6 +44,7 @@ export async function createSession(req, res) {
       created_by_id: clerkId,
       members: [clerkId],
     });
+    //create the channel
     await channel.create();
     res.status(201).json({ session });
   } catch (err) {
