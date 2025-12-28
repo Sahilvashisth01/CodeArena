@@ -309,3 +309,47 @@ npm run build --prefix frontend
 Suggestions
 - Add a small `frontend/src/hooks/useApi.js` to wrap axios + react-query calls for consistent error handling and token refresh logic if needed.
 - Add `frontend/.env.example` listing `VITE_CLERK_PUBLISHABLE_KEY` and `VITE_API_URL`.
+# HomePage — Main things
+
+Short reference for the HomePage component (frontend/src/pages/HomePage.jsx).
+
+## Sections
+- NAVBAR
+  - Logo link ("/")
+  - Clerk SignInButton opens modal (Get Started)
+  - Uses SparklesIcon, ArrowRightIcon
+
+- HERO
+  - Left: headline, subcopy, feature pills, CTA buttons (SignInButton + Watch Demo)
+  - Right: hero image (`/hero.png`)
+  - Responsive two-column grid (lg:grid-cols-2)
+
+- FEATURE GRID
+  - 3 feature cards: HD Video Call, Live Code Editor, Easy Collaboration
+  - Uses VideoIcon, Code2Icon, UsersIcon
+  - Cards use DaisyUI `card` styling
+
+- STATS
+  - stats-vertical / lg:stats-horizontal containing Active Users, Sessions, Uptime
+
+## Styling & Utilities
+- Tailwind + DaisyUI utility classes throughout (examples: `bg-linear-to-br`, `badge`, `btn`, `card`, `stats`)
+- Animations: `hover:scale-105`, `transition-transform`, `duration-500`
+- Icons from `lucide-react`
+
+## Auth / Behavior notes
+- Sign-in buttons use `@clerk/clerk-react` SignInButton (mode="modal")
+- HomePage is intended for unauthenticated users; authenticated users are redirected by App.jsx
+
+## Assets
+- Expects `/hero.png` in public/static assets
+
+## Files of interest
+- Component: frontend/src/pages/HomePage.jsx
+- Docs: this file
+- Styling: frontend/src/index.css (Tailwind + DaisyUI)
+- Routing/auth check: frontend/src/App.jsx
+
+## Quick dev notes
+- If you change SignInButton usage, ensure Clerk provider & publishable key are configured in main.jsx
+- For layout tweaks, adjust Tailwind classes directly in HomePage.jsx
