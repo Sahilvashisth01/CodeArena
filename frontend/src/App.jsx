@@ -10,18 +10,26 @@ import {
 
 import { Navigate,Routes,Route } from "react-router";
 import HomePage from "./pages/HomePage.jsx";
+import DashboardPage from "./pages/DashboardPage.jsx";
 import ProblemPage from "./pages/ProblemPage.jsx";
 import { Toaster } from "react-hot-toast";
 
 
 function App() {
-  const {isSignedIn} = useUser();
+
+// Wait until Clerk finishes resolving authentication state
+// Prevents rendering incorrect UI during initial load
+  const {isSignedIn,isLoaded} = useUser();//to check if user auth state is loaded
+  if(!isLoaded){//to prevent flickering
+    return null;
+  }
 
   return (
     <>
     
     <Routes>
-      <Route path="/" element={<HomePage />} />
+      <Route path="/" element={!isSignedIn ? <HomePage /> : <Navigate to={"/dashboard"} />} />
+      <Route path="/dashboard" element={isSignedIn ? <DashboardPage /> : <Navigate to={"/"} />} />
       <Route path="/problems" element={isSignedIn ? <ProblemPage /> : <Navigate to={"/"} />} />
     </Routes>
     <Toaster  toastOptions={{duration:3000}}/>
