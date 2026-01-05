@@ -27,22 +27,24 @@ export async function createSession(req, res) {
     });
 
     //create stream video call
-    await streamClient.video.call("default", callId).getOrCreate({
-      data: {
-        created_by: clerkUserId,
-        custom: {
-          problem,
-          difficulty,
-          sessionId: session._id.toString(),
-        },
-      },
-    });
+   await streamClient.video.call("default", callId).getOrCreate({
+  data: {
+    created_by: {
+      id: clerkUserId, // ✅ MUST be an object
+    },
+    custom: {
+      problem,
+      difficulty,
+      sessionId: session._id.toString(),
+    },
+  },
+});
 
     //chat messaging
     const channel = chatClient.channel("messaging", callId, {
       name: `${problem} Session`,
-      created_by_id: clerkId,
-      members: [clerkId],
+      created_by_id: clerkUserId,
+      members: [clerkUserId],
     });
     //create the channel
     await channel.create();
