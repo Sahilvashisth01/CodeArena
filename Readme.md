@@ -353,3 +353,105 @@ Short reference for the HomePage component (frontend/src/pages/HomePage.jsx).
 ## Quick dev notes
 - If you change SignInButton usage, ensure Clerk provider & publishable key are configured in main.jsx
 - For layout tweaks, adjust Tailwind classes directly in HomePage.jsx
+
+
+# ProblemsPage — Main things
+
+Short reference for the ProblemsPage component (frontend/src/pages/ProblemsPage.jsx).
+
+## Purpose
+List and browse practice problems, show per-difficulty counts, and link to individual problem pages.
+
+## Main pieces
+- Navbar — imported from `../components/Navbar`.
+- Problems data — reads `PROBLEMS` from `../data/problems`.
+- Utility — `getDifficultyBadgeClass` from `../lib/utils` to render difficulty badges.
+- Icons — `Code2Icon`, `ChevronRightIcon` from `lucide-react`.
+
+## Behavior
+- Converts `PROBLEMS` object to an array: `const problems = Object.values(PROBLEMS)`.
+- Computes counts:
+  - easyProblemsCount = problems.filter(p => p.difficulty === "Easy").length
+  - mediumProblemsCount, hardProblemsCount similar.
+- Renders each problem as a clickable card linking to `/problem/:id`.
+- Card shows: icon, title, difficulty badge, category, short description, and a "Solve" CTA.
+
+## Styling & UI
+- Uses Tailwind + DaisyUI classes: `card`, `badge`, `stats`, etc.
+- Hover transform: `hover:scale-[1.01]`, `transition-transform`.
+- Responsive layout via container widths (`max-w-6xl`) and spacing utilities.
+
+## Expected PROBLEMS shape (example)
+{
+  id: "two-sum",
+  title: "Two Sum",
+  difficulty: "Easy" | "Medium" | "Hard",
+  category: "Array",
+  description: { text: "short description..." },
+  // other fields...
+}
+
+## Notes / To-dos
+- Consider adding client-side filtering / search.
+- Ensure routing has a Route for `/problem/:id`.
+- If using remote data later, replace `PROBLEMS` import with a fetch / react-query hook and show loading/error states.
+
+
+
+
+
+
+# ProblemPage — Main things
+
+Short reference for the ProblemPage component (frontend/src/pages/ProblemPage.jsx).
+
+## Purpose
+Render a full problem workspace: problem description, code editor, and output. Run user code via the Piston API and validate output against expected results.
+
+## Layout / Components
+- Navbar — `../components/Navbar`
+- Panel layout — `react-resizable-panels` (PanelGroup, Panel, PanelResizeHandle)
+- ProblemDescription — left panel (`../components/ProblemDescription`)
+- CodeEditorPanel — top-right panel (`../components/CodeEditorPanel`)
+- OutputPanel — bottom-right panel (`../components/OutputPanel`)
+
+
+- confetti — `canvas-confetti` (celebration on success)
+
+## Key state
+- currentProblemId (string) — active problem id (initialized to "two-sum")
+- selectedLanguage (string) — "javascript" | "python" | "java" | "cpp"
+- code (string) — editor content (starter code from PROBLEMS)
+- output (object|null) — result from executeCode: { success, output, error } or null
+- isRunning (bool) — running flag for UI
+
+## Routing behavior
+- Reads `id` from URL via `useParams()`
+- When `id` changes and exists in PROBLEMS, updates currentProblemId, loads starter code for selectedLanguage, and clears output.
+
+## Important functions
+- handleLanguageChange(e)
+  - Updates selectedLanguage, loads corresponding starter code, clears output.
+- handleProblemChange(newProblemId)
+  - Navigates to `/problem/:id` (uses useNavigate); useEffect handles loading.
+- handleRunCode()
+  - Sets isRunning, clears output, calls executeCode(selectedLanguage, code)
+  - Stores result in output, sets isRunning false
+  - If execution succeeded, compares result.output to expectedOutput for the current problem & language
+    - Uses normalizeOutput() and checkIfTestsPassed() for robust comparison
+    - On pass → confetti + toast.success
+    - On fail → toast.error
+- normalizeOutput(output)
+  - Trims lines, normalizes spacing around commas/brackets, removes empty lines
+- checkIfTestsPassed(actual, expected)
+  - Compares normalized strings (==)
+
+
+
+## Notes & caveats
+- executeCode must support the selectedLanguage and return { success, output, error }.
+- Comparison is string-based; for complex outputs consider parsing (JSON) before compare.
+- Ensure PROBLEMS contains starterCode and expectedOutput for every supported language.
+- Resize handles provided by `react-resizable-panels` allow layout adjustments; min/default sizes set in JSX.
+- UI feedback uses isRunning to disable run button and show spinner (handled in CodeEditorPanel).
+
