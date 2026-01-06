@@ -1,4 +1,6 @@
 import express from "express";
+import path from "path";
+import { fileURLToPath } from "url";
 import { inngest, functions } from "./lib/inngest.js";
 import dotenv from "dotenv";
 import { ENV } from "./lib/env.js";
@@ -13,7 +15,11 @@ dotenv.config();
 
 const app = express();
 
-// middleware
+// ===== FIX __dirname FOR ES MODULE =====
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// ===== MIDDLEWARE =====
 app.use(express.json());
 app.use(
   cors({
@@ -24,18 +30,28 @@ app.use(
 
 app.use(clerkMiddleware());
 
+// ===== API ROUTES =====
 app.use("/api/inngest", serve({ client: inngest, functions }));
 app.use("/api/chat", chatRoutes);
 app.use("/api/sessions", sessionRoutes);
+
 app.get("/api/health", (req, res) => {
   res.status(200).json({ status: "ok" });
 });
-app.get("/", (req, res) => {
-  res.status(200).json({ message: "Backend running" });
-});
-// ❌ REMOVE frontend serving in production
-// Frontend is deployed separately on Sevalla
 
+// ===== FRONTEND SERVING (PRODUCTION) =====
+if (ENV.NODE_ENV === "production") {
+  const frontendPath = path.join(__dirname, "../../frontend/dist");
+
+  app.use(express.static(frontendPath));
+
+  // SPA fallback (VERY IMPORTANT)
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(frontendPath, "index.html"));
+  });
+}
+
+// ===== START SERVER =====
 const startServer = async () => {
   try {
     await connectDB();
