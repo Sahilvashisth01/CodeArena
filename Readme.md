@@ -455,3 +455,198 @@ Render a full problem workspace: problem description, code editor, and output. R
 - Resize handles provided by `react-resizable-panels` allow layout adjustments; min/default sizes set in JSX.
 - UI feedback uses isRunning to disable run button and show spinner (handled in CodeEditorPanel).
 
+
+
+// ...existing code...
+
+## DashboardPage — Technical details & how it works
+
+Location: frontend/src/pages/DashboardPage.jsx  
+Related files:
+- Components: frontend/src/components/Navbar.jsx, WelcomeSection, StatsCard, ActiveSession, RecentSession, CreateSessionModal
+- Hooks/API: frontend/src/hooks/useSessions.js, frontend/src/api/session.js
+- Backend endpoints used: /api/sessions (POST), /api/sessions/active (GET), /api/sessions/my-recent (GET)
+
+Purpose
+- Main authenticated landing for hosts/participants.
+- Lists active sessions, recent sessions, site stats, and provides UI to create or join sessions.
+
+Data flow & state
+- useActiveSessions() (react-query) → fetches GET /sessions/active. Result shown in ActiveSessions component.
+- useMyRecentSessions() (react-query) → fetches GET /sessions/my-recent. Result shown in RecentSessions component.
+- useCreateSession() (react-query mutation) → POST /sessions to create a new session.
+- Local state in DashboardPage:
+  - showCreateModal (bool): controls CreateSessionModal visibility
+  - roomConfig ({ problem, difficulty }): selected problem + difficulty for session create
+
+Create session flow
+1. User opens CreateSessionModal (WelcomeSection triggers setShowCreateModal(true)).
+2. User selects problem & difficulty → roomConfig updated.
+3. handleCreateRoom validates roomConfig then calls createSessionMutation.mutate(payload).
+4. useCreateSession.onSuccess shows a toast and DashboardPage onSuccess callback navigates to /session/{session._id}.
+5. createSessionMutation errors are surfaced via toast (configured in hook).
+
+UI behaviors & optimizations
+- Loading states:
+  - Active/recent sessions queries expose isLoading; the components show skeletons or loaders accordingly.
+  - CreateSessionModal disables create button while mutation is pending (CreateSessionModal reads mutation state passed as isCreating).
+- isUserInSession() helper determines whether the current Clerk user is host/participant to show join/end actions.
+- Pagination/filtering: currently the backend returns limited results (up to 20); add UI filters if needed.
+
+React Query specifics
+- useQuery is used for active & recent sessions with default cache/stale behavior; you can tune staleTime/cacheTime in hooks.
+- useSessionById (used elsewhere) sets refetchInterval: 5000 to poll session status — useful for session lifecycle updates (participant joined, ended).
+- Mutations use optimistic UX via toast notifications; add onMutate/revert logic if you want immediate UI updates before server confirms.
+
+API contract (frontend expectations)
+- POST /sessions { problem, difficulty } → returns { session } with session._id, host, callId, etc.
+- GET /sessions/active → returns { sessions: [...] }
+- GET /sessions/my-recent → returns { sessions: [...] }
+- All endpoints expect authenticated requests (Clerk session / credentials). The frontend axios instance uses withCredentials to send cookies.
+
+Error handling & UX
+- Hooks centralize error toast messages (see useSessions.js).
+- DashboardPage relies on hook errors to inform users; consider centralizing retry logic or showing inline error state in each component.
+
+Testing & debugging tips
+- To test create flow locally:
+  1. Ensure backend is running and Clerk auth is active.
+  2. Sign in with Clerk in the frontend.
+  3. Open Dashboard, create a session and confirm navigation to /session/{id}.
+- To debug missing sessions or auth:
+  - Check backend logs for Inngest / Stream errors.
+  - Verify axios baseURL and that requests include credentials.
+  - Inspect network tab for responses from /sessions endpoints.
+
+To extend
+- Add client-side filters and search for problems in CreateSessionModal.
+- Add optimistic UI for adding sessions to ActiveSessions list on create.
+- Add websocket/real-time updates (Socket/Stream webhook) instead of polling for session state.
+
+
+// ...existing code...
+
+
+// ...existing code...
+
+## Session Page — Components, technical details & how it works
+
+Location: frontend/src/pages/SessionPage.jsx
+
+Purpose
+- Real-time collaborative session UI combining problem description, code editor, code execution, video call and chat.
+
+Top-level composition
+- SessionPage.jsx — main page layout using PanelGroup (react-resizable-panels).
+  - Left: Problem details (top) + Code editor (bottom-left) + Output (bottom-right).
+  - Right: Video call UI + Chat.
+- Components used:
+  - Navbar — frontend/src/components/Navbar.jsx
+  - CodeEditorPanel — frontend/src/components/CodeEditorPanel.jsx (Monaco editor + language selector + Run button)
+  - OutputPanel — frontend/src/components/OutputPanel.jsx (renders execution result)
+  - VideoCallUI — frontend/src/components/VideoCallUI.jsx (Stream Video call + chat toggle)
+  - ProblemDescription (inline content in SessionPage or component file) — shows description, examples, constraints
+
+Supporting hooks & libs
+- useSessionById (frontend/src/hooks/useSessions.js)
+  - Fetches session data from backend (`sessionApi.getSessionById(id)`).
+  - Polls session status (refetchInterval: 5000) so UI updates when participant joins / session ends.
+- useJoinSession, useEndSession (useSessions)
+  - Mutations to join or end sessions; show toasts on success/error.
+- sessionApi (frontend/src/api/session.js)
+  - Axios wrappers for backend session endpoints:
+    - GET /sessions/:id, POST /sessions/:id/join, POST /sessions/:id/end, GET /chat/token
+- executeCode (frontend/src/lib/piston.js)
+  - Calls Piston API to run user code; returns { success, output, error }.
+  - Used by both SessionPage and ProblemPage for "Run Code" feature.
+- getDifficultyBadgeClass (frontend/src/lib/utils.js)
+  - UI helper for difficulty badge styling.
+
+Video & Chat integration
+- Stream SDK
+  - initializeStreamClient / disconnectStreamClient (frontend/src/lib/stream.js)
+    - Creates a StreamVideoClient with apiKey, user and token.
+    - Disconnects user & cleans up client singleton.
+  - useStreamClient hook (frontend/src/hooks/useStreamClient.js)
+    - Responsibilities:
+      - Calls backend `sessionApi.getStreamToken()` to get Stream token and user fields.
+      - Initializes StreamVideoClient and joins video call: client.call("default", session.callId).join({ create: true }).
+      - Initializes StreamChat client and watches messaging channel: chatClient.channel("messaging", session.callId).watch().
+      - Returns { streamClient, call, chatClient, channel, isInitializingCall }.
+      - Cleans up on unmount: leave call, disconnect chat, disconnect stream client.
+    - Error handling: toasts on failure; sets isInitializingCall to false in finally.
+
+VideoCallUI (frontend/src/components/VideoCallUI.jsx)
+- Uses StreamVideo components: StreamVideo, StreamCall, SpeakerLayout, CallControls.
+- Shows participant count (useCallStateHooks).
+- Chat toggle opens Stream Chat (stream-chat-react) in right panel:
+  - Channel, Chat, MessageList, MessageInput, Thread.
+- UX:
+  - Loading/joining state handled via useCallCallingState.
+  - CallControls.onLeave navigates back to /dashboard.
+  - Chat panel width toggles with CSS class; components lazy-render only when chatClient & channel exist.
+
+Code editor & execution
+- CodeEditorPanel
+  - Monaco editor configured via @monaco-editor/react.
+  - Language selector reads LANGUAGE_CONFIG and switches monaco language + starter code.
+  - Run button triggers onRunCode; shows spinner when isRunning true.
+- OutputPanel
+  - Renders output or errors using monospace blocks.
+  - Handles null state (no run yet) and success vs error states.
+
+Session lifecycle & main flows
+1. Load page → useSessionById fetches session data.
+2. If user is neither host nor participant and session active → auto-join (useJoinSession) triggers and refetches session.
+3. If session.status === "completed" → participant(s) redirected to /dashboard.
+4. When problemData loads, editor starter code is set for selectedLanguage.
+5. Run code:
+   - handleRunCode calls executeCode(selectedLanguage, code).
+   - Output stored in state; OutputPanel shows success or error.
+6. Host can end session using useEndSession mutation; on success navigate to /dashboard.
+
+Important details & caveats
+- Authentication:
+  - All session API calls require auth (Clerk). Axios instance is configured with withCredentials: true.
+  - sessionApi.getStreamToken requires an authenticated request to return Stream token and user info.
+- Stream tokens:
+  - Backend generates token using server Stream secret; frontend never stores the secret.
+  - session.callId is used as both video call identifier and chat channel id.
+- Clean-up:
+  - useStreamClient ensures video and chat clients are left/disconnected on unmount to avoid leaking resources.
+- Polling vs real-time:
+  - Session state is polled via useSessionById (5000ms). Consider replacing with server-sent events or socket updates for lower latency.
+- Error handling:
+  - Most failures show toast messages; UI shows "Connection Failed" card if stream client or call not available.
+- Starter code & expected outputs:
+  - Problems come from PROBLEMS (frontend/src/data/problems). Ensure starterCode and expectedOutput exist per language if you run automated checks.
+
+Testing & debugging tips
+- To test video flow locally:
+  - Ensure backend /chat/token endpoint works and the server has STREAM_API_KEY/SECRET.
+  - Authenticate a user using Clerk, create a session, then open session URL in two browsers/tabs (different users) to test joining.
+- To test code execution:
+  - Use Run Code with simple prints; inspect network tab to ensure POST to Piston URL succeeds.
+  - Check executeCode error message if Piston returns non-200.
+- Common failures:
+  - Missing VITE_STREAM_API_KEY or backend token endpoint failure → video join fails.
+  - Axios failing due to CORS or missing cookies → ensure withCredentials and correct API origin are configured.
+
+Where to look in code
+- Page & layout: frontend/src/pages/SessionPage.jsx
+- Video init & cleanup: frontend/src/hooks/useStreamClient.js, frontend/src/lib/stream.js
+- Video UI: frontend/src/components/VideoCallUI.jsx
+- Editor & output: frontend/src/components/CodeEditorPanel.jsx, frontend/src/components/OutputPanel.jsx
+- Session API: frontend/src/api/session.js
+- Session hooks: frontend/src/hooks/useSessions.js
+- Code execution: frontend/src/lib/piston.js
+- Problem data: frontend/src/data/problems.js
+
+Possible improvements
+- Use WebSockets / Stream event handlers to reduce polling.
+- Add retries/backoff for call/chat initialization.
+- Show inline errors in UI (not just toasts) for better UX.
+- Centralize Stream/Chat initialization & token refresh handling.
+
+
+// ...existing code...
