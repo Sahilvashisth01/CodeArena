@@ -202,6 +202,7 @@ Local testing checklist
 
 
 
+
 **Session Endpoints**
 - **Base path:** `/api/sessions` (mounted in `backend/src/server.js`). All routes below are protected and require a logged-in user via Clerk + `protectRoute`.
 - **POST /**: Create a session
