@@ -30,7 +30,9 @@ app.use("/api/sessions", sessionRoutes);
 app.get("/api/health", (req, res) => {
   res.status(200).json({ status: "ok" });
 });
-
+app.get("/", (req, res) => {
+  res.status(200).json({ message: "Backend running" });
+});
 // ❌ REMOVE frontend serving in production
 // Frontend is deployed separately on Sevalla
 
