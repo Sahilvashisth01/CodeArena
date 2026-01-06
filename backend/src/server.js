@@ -1,5 +1,4 @@
 import express from "express";
-import path from "path";
 import { inngest, functions } from "./lib/inngest.js";
 import dotenv from "dotenv";
 import { ENV } from "./lib/env.js";
@@ -14,26 +13,23 @@ dotenv.config();
 
 const app = express();
 
-const __dirname = path.resolve();
-
-//middleware
+// middleware
 app.use(express.json());
-//credentials true meaning => server allow a browser to include cookies on request
-app.use(cors({ origin: ENV.CLIENT_URL, credentials: true }));
-app.use(clerkMiddleware()); //this adds auth field to request object: req.auth
+app.use(
+  cors({
+    origin: ENV.CLIENT_URL,
+    credentials: true,
+  })
+);
 
-app.use("/api/inngest", serve({ client: inngest, functions }));//inngest endpoint
+app.use(clerkMiddleware());
 
+app.use("/api/inngest", serve({ client: inngest, functions }));
 app.use("/api/chat", chatRoutes);
 app.use("/api/sessions", sessionRoutes);
 
-//make our app ready for deployment
-if (ENV.NODE_ENV === "production") {
-  app.use(express.static(path.join(__dirname, "../frontend/dist")));
-  app.get("/{*any}", (req, res) => {
-    res.sendFile(path.join(__dirname, "../frontend/dist/index.html"));
-  });
-}
+// ❌ REMOVE frontend serving in production
+// Frontend is deployed separately on Sevalla
 
 const startServer = async () => {
   try {
@@ -45,4 +41,5 @@ const startServer = async () => {
     console.log("Failed to start server:", err);
   }
 };
+
 startServer();
