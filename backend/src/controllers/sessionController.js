@@ -117,38 +117,50 @@ export async function joinSession(req, res) {
 
     const session = await Session.findById(id);
     if (!session) {
-      return res.status(404).json({ msg: "Session not found" });
+      return res.status(404).json({ message: "Session not found" });
     }
 
-    // normalize participants as array
-    if (!Array.isArray(session.participants)) {
-      session.participants = [];
+    if (session.status !== "active") {
+      return res.status(400).json({ message: "Cannot join a completed session" });
     }
 
-    // ❌ user already joined
-    if (session.participants.includes(userId)) {
+    // host should not join as participant
+    if (session.host.toString() === userId.toString()) {
       return res.status(200).json({ session });
     }
 
-    // ❌ session full (host + 1 participant)
-    if (session.participants.length >= 2) {
-      return res.status(400).json({ msg: "Session is already full" });
+    // already joined
+    if (session.participant?.toString() === userId.toString()) {
+      return res.status(200).json({ session });
     }
 
-    // ✅ add participant
-    session.participants.push(userId);
+    // session full
+    if (session.participant) {
+      return res.status(409).json({ message: "Session is full" });
+    }
+
+    // save participant
+    session.participant = userId;
     await session.save();
 
-    // ✅ add to stream chat
-    const channel = chatClient.channel("messaging", session.callId);
-    await channel.addMembers([clerkId]);
+    // 🔐 STREAM SHOULD NEVER BREAK JOIN
+    try {
+      const channel = chatClient.channel("messaging", session.callId);
+      await channel.addMembers([clerkId]);
+    } catch (streamError) {
+      console.warn(
+        "Stream addMembers failed (ignored):",
+        streamError.message
+      );
+    }
 
-    res.status(200).json({ session });
-  } catch (err) {
-    console.error("Error in joinSession controller:", err);
-    res.status(500).json({ msg: "Internal server error" });
+    return res.status(200).json({ session });
+  } catch (error) {
+    console.error("Error in joinSession controller:", error);
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 }
+
 
 export async function endSession(req, res) {
     //only host can end the session
