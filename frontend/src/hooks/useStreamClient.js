@@ -66,7 +66,7 @@ function useStreamClient(session, loadingSession, isHost, isParticipant) {
       }
     };
 
-    if (session && !loadingSession) initCall();
+    if (session && !loadingSession) initCall(); 
 
     // cleanup - performance reasons
     return () => {
