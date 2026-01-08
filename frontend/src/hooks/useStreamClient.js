@@ -36,7 +36,7 @@ function useStreamClient(session, loadingSession, isHost, isParticipant) {
         setStreamClient(client);
 
         videoCall = client.call("default", session.callId);
-        await videoCall.join({ create: true });
+        await videoCall.join();
         setCall(videoCall);
 
         const apiKey = import.meta.env.VITE_STREAM_API_KEY;
