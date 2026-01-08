@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { StreamChat } from "stream-chat";
 import toast from "react-hot-toast";
 import { initializeStreamClient, disconnectStreamClient } from "../lib/stream";
-import { sessionApi } from "../api/session";
+import { sessionApi } from "../api/sessions";
 
 function useStreamClient(session, loadingSession, isHost, isParticipant) {
   const [streamClient, setStreamClient] = useState(null);
@@ -21,7 +21,7 @@ function useStreamClient(session, loadingSession, isHost, isParticipant) {
       if (session.status === "completed") return;
 
       try {
-        const { chatToken, videoToken, userId, userName, userImage } =
+        const { token, userId, userName, userImage } =
           await sessionApi.getStreamToken();
 
         const client = await initializeStreamClient(
@@ -30,13 +30,13 @@ function useStreamClient(session, loadingSession, isHost, isParticipant) {
             name: userName,
             image: userImage,
           },
-          videoToken
+          token
         );
 
         setStreamClient(client);
 
         videoCall = client.call("default", session.callId);
-        await videoCall.join();
+        await videoCall.join({ create: true });
         setCall(videoCall);
 
         const apiKey = import.meta.env.VITE_STREAM_API_KEY;
@@ -48,7 +48,7 @@ function useStreamClient(session, loadingSession, isHost, isParticipant) {
             name: userName,
             image: userImage,
           },
-          chatToken
+          token
         );
         setChatClient(chatClientInstance);
 
