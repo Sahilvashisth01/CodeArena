@@ -111,24 +111,35 @@ export async function getSessionById(req, res) {
 
 export async function joinSession(req, res) {
   try {
-    //extract session id from params
     const { id } = req.params;
     const userId = req.user._id;
     const clerkId = req.user.clerkId;
 
-    //find session by id
     const session = await Session.findById(id);
     if (!session) {
       return res.status(404).json({ msg: "Session not found" });
     }
-    //check if session is already full - has a participant
-    if (session.participants)
-      return res.status(400).json({ msg: "Session is already full" });
 
-    //add user to participants
-    session.participants = userId;
+    // normalize participants as array
+    if (!Array.isArray(session.participants)) {
+      session.participants = [];
+    }
+
+    // ❌ user already joined
+    if (session.participants.includes(userId)) {
+      return res.status(200).json({ session });
+    }
+
+    // ❌ session full (host + 1 participant)
+    if (session.participants.length >= 2) {
+      return res.status(400).json({ msg: "Session is already full" });
+    }
+
+    // ✅ add participant
+    session.participants.push(userId);
     await session.save();
-    //add user to stream chat channel
+
+    // ✅ add to stream chat
     const channel = chatClient.channel("messaging", session.callId);
     await channel.addMembers([clerkId]);
 
