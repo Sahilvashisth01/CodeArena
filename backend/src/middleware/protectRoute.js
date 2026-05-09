@@ -17,7 +17,7 @@ export const protectRoute = [
       }
       // Attach the user to the request object for downstream use
       req.user = user;
-      next();
+      next();//proceed to next middleware or route handler
     } catch (error) {
       console.error("Error in protectRoute middleware:", error);
       res.status(500).json({ msg: "Internal Server Error" });

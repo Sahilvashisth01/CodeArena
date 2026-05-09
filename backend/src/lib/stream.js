@@ -11,7 +11,7 @@ if (!apiKey || !apiSecret) {
 
 export const chatClient = StreamChat.getInstance(apiKey, apiSecret); // will be used chat features
 export const streamClient = new StreamClient(apiKey, apiSecret); // will be used for video calls
-
+// function to create or update user in stream when created in clerk and also delete from stream when deleted from clerk
 export const upsertStreamUser = async (userData) => {
   try {
     await chatClient.upsertUser(userData);
